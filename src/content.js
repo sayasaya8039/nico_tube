@@ -132,6 +132,12 @@ function createContainer() {
  * @param {Object[]} results - 検索結果
  */
 function displayResults(results) {
+  // コンテナが存在しない場合は何もしない（ナビゲーション中に削除された場合）
+  if (!nicotubeContainer) {
+    console.log('[NicoTube] コンテナが存在しないため表示をスキップ');
+    return;
+  }
+
   const content = nicotubeContainer.querySelector('.nicotube-content');
 
   if (results.length === 0) {
