@@ -2,6 +2,8 @@
  * NicoTube - YouTubeでニコニコ動画のリンクを表示
  */
 
+console.log('[NicoTube] 拡張機能が読み込まれました');
+
 // 状態管理
 let currentVideoId = null;
 let nicotubeContainer = null;
@@ -21,12 +23,15 @@ async function searchNicoVideo(query) {
     _limit: '5'
   });
 
+  console.log('[NicoTube] API検索:', query);
+
   try {
     const response = await fetch(`${endpoint}?${params}`);
     if (!response.ok) {
       throw new Error(`API error: ${response.status}`);
     }
     const data = await response.json();
+    console.log('[NicoTube] 検索結果:', data.data?.length || 0, '件');
     return data.data || [];
   } catch (error) {
     console.error('[NicoTube] 検索エラー:', error);
@@ -39,23 +44,52 @@ async function searchNicoVideo(query) {
  * @returns {string|null}
  */
 function getVideoTitle() {
-  // メインの動画タイトル要素
-  const titleElement = document.querySelector(
-    'h1.ytd-watch-metadata yt-formatted-string, ' +
-    'h1.title.ytd-video-primary-info-renderer yt-formatted-string, ' +
+  // 2024年以降のYouTubeレイアウト対応
+  const selectors = [
+    // 新しいレイアウト
+    'ytd-watch-metadata h1.ytd-watch-metadata yt-formatted-string',
+    'ytd-watch-metadata #title yt-formatted-string',
+    '#above-the-fold #title yt-formatted-string',
+    // 古いレイアウト
+    'h1.ytd-video-primary-info-renderer yt-formatted-string',
+    '#info-contents h1 yt-formatted-string',
+    // フォールバック
+    'h1 yt-formatted-string.ytd-watch-metadata',
     '#title h1 yt-formatted-string'
-  );
+  ];
 
-  if (titleElement) {
-    return titleElement.textContent.trim();
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    if (element && element.textContent.trim()) {
+      console.log('[NicoTube] タイトル取得成功 (selector:', selector, ')');
+      return element.textContent.trim();
+    }
   }
 
-  // フォールバック: meta tagから取得
+  // meta tagから取得
   const metaTitle = document.querySelector('meta[name="title"]');
-  if (metaTitle) {
+  if (metaTitle && metaTitle.getAttribute('content')) {
+    console.log('[NicoTube] タイトル取得成功 (meta tag)');
     return metaTitle.getAttribute('content');
   }
 
+  // og:titleから取得
+  const ogTitle = document.querySelector('meta[property="og:title"]');
+  if (ogTitle && ogTitle.getAttribute('content')) {
+    console.log('[NicoTube] タイトル取得成功 (og:title)');
+    return ogTitle.getAttribute('content');
+  }
+
+  // document.titleから取得（最終手段）
+  if (document.title && document.title.includes(' - YouTube')) {
+    const title = document.title.replace(' - YouTube', '').trim();
+    if (title) {
+      console.log('[NicoTube] タイトル取得成功 (document.title)');
+      return title;
+    }
+  }
+
+  console.log('[NicoTube] タイトルが取得できませんでした');
   return null;
 }
 
@@ -155,21 +189,14 @@ function formatNumber(num) {
  * @returns {string}
  */
 function optimizeQuery(title) {
-  // よくある不要なパターンを除去
   let query = title
-    // 【】内の情報を除去（チャンネル名など）
     .replace(/【[^】]*】/g, '')
-    // []内の情報を除去
     .replace(/\[[^\]]*\]/g, '')
-    // ()内の情報を一部除去（長いものだけ）
     .replace(/\([^)]{10,}\)/g, '')
-    // 公式、Official等を除去
     .replace(/(\s*[-|｜]\s*)?(公式|Official|MV|PV|Music Video|Full|HD|4K|Lyrics?|歌詞|字幕|sub|subtitle)/gi, '')
-    // 余分な空白を整理
     .replace(/\s+/g, ' ')
     .trim();
 
-  // 短すぎる場合は元のタイトルを使用
   if (query.length < 3) {
     query = title;
   }
@@ -178,11 +205,33 @@ function optimizeQuery(title) {
 }
 
 /**
+ * タイトルが読み込まれるまで待機
+ * @param {number} maxWait - 最大待機時間（ミリ秒）
+ * @returns {Promise<string|null>}
+ */
+async function waitForTitle(maxWait = 5000) {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWait) {
+    const title = getVideoTitle();
+    if (title) {
+      return title;
+    }
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+
+  return null;
+}
+
+/**
  * メイン処理
  */
 async function main() {
+  console.log('[NicoTube] main() 実行, URL:', window.location.href);
+
   // YouTube動画ページかチェック
   if (!window.location.pathname.startsWith('/watch')) {
+    console.log('[NicoTube] 動画ページではありません');
     if (nicotubeContainer) {
       nicotubeContainer.classList.add('nicotube-hidden');
     }
@@ -190,6 +239,7 @@ async function main() {
   }
 
   const videoId = getVideoId();
+  console.log('[NicoTube] 動画ID:', videoId);
 
   // 同じ動画の場合はスキップ
   if (videoId === currentVideoId && nicotubeContainer) {
@@ -199,10 +249,8 @@ async function main() {
 
   currentVideoId = videoId;
 
-  // タイトル取得を少し待つ（SPAのため）
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
-  const title = getVideoTitle();
+  // タイトル取得を待機
+  const title = await waitForTitle();
   if (!title) {
     console.log('[NicoTube] タイトルが取得できませんでした');
     return;
@@ -221,16 +269,31 @@ async function main() {
   displayResults(results);
 }
 
-// YouTube SPAのナビゲーションを監視
+// YouTube SPAのナビゲーションを監視（複数の方法を使用）
+
+// 方法1: yt-navigate-finish イベント（YouTube公式のSPAイベント）
+document.addEventListener('yt-navigate-finish', () => {
+  console.log('[NicoTube] yt-navigate-finish イベント検出');
+  main();
+});
+
+// 方法2: URL変化の監視（MutationObserver）
 let lastUrl = location.href;
 const observer = new MutationObserver(() => {
   if (location.href !== lastUrl) {
+    console.log('[NicoTube] URL変化検出:', lastUrl, '->', location.href);
     lastUrl = location.href;
-    main();
+    setTimeout(main, 500);
   }
 });
 
 observer.observe(document.body, { childList: true, subtree: true });
 
-// 初期実行
-main();
+// 方法3: popstate イベント（ブラウザの戻る/進む）
+window.addEventListener('popstate', () => {
+  console.log('[NicoTube] popstate イベント検出');
+  main();
+});
+
+// 初期実行（少し遅延させる）
+setTimeout(main, 1000);
