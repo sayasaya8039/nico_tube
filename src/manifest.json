@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "NicoTube - ニコ動リンク表示",
+  "version": "1.0.0",
+  "description": "YouTubeで視聴中の動画がニコニコ動画にもある場合、リンクを表示します",
+  "permissions": [],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://snapshot.search.nicovideo.jp/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
