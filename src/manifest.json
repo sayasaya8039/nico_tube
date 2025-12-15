@@ -1,13 +1,16 @@
 {
   "manifest_version": 3,
   "name": "NicoTube - ニコ動リンク表示",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "YouTubeで視聴中の動画がニコニコ動画にもある場合、リンクを表示します",
   "permissions": [],
   "host_permissions": [
     "https://www.youtube.com/*",
     "https://snapshot.search.nicovideo.jp/*"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*"],
