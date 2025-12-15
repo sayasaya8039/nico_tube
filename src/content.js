@@ -317,5 +317,41 @@ window.addEventListener('popstate', () => {
   onNavigate();
 });
 
+// 方法5: ページ表示時（他サイトから戻ってきた時）
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    console.log('[NicoTube] ページが表示されました');
+    // 動画ページでコンテナがない場合は再実行
+    if (window.location.pathname.startsWith('/watch') && !nicotubeContainer) {
+      console.log('[NicoTube] コンテナがないため再実行');
+      currentVideoId = null;
+      setTimeout(main, 500);
+    }
+  }
+});
+
+// 方法6: フォーカス時（タブ切り替え）
+window.addEventListener('focus', () => {
+  console.log('[NicoTube] ウィンドウにフォーカス');
+  if (window.location.pathname.startsWith('/watch') && !nicotubeContainer) {
+    console.log('[NicoTube] コンテナがないため再実行');
+    currentVideoId = null;
+    setTimeout(main, 500);
+  }
+});
+
+// 方法7: pageshow イベント（BFCache から復元時）
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) {
+    console.log('[NicoTube] BFCacheから復元');
+    currentVideoId = null;
+    if (nicotubeContainer) {
+      nicotubeContainer.remove();
+      nicotubeContainer = null;
+    }
+    setTimeout(main, 500);
+  }
+});
+
 // 初期実行（少し遅延させる）
 setTimeout(main, 1000);
