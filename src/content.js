@@ -264,30 +264,57 @@ async function main() {
   displayResults(results);
 }
 
+/**
+ * ナビゲーション時にリセットして再検索
+ */
+function onNavigate() {
+  console.log('[NicoTube] ナビゲーション検出 - リセット');
+  // 前の動画IDをクリアして強制再検索
+  currentVideoId = null;
+  // 既存のコンテナを削除
+  if (nicotubeContainer) {
+    nicotubeContainer.remove();
+    nicotubeContainer = null;
+  }
+  // 少し遅延してから実行（ページ読み込み待ち）
+  setTimeout(main, 800);
+}
+
 // YouTube SPAのナビゲーションを監視（複数の方法を使用）
 
 // 方法1: yt-navigate-finish イベント（YouTube公式のSPAイベント）
 document.addEventListener('yt-navigate-finish', () => {
   console.log('[NicoTube] yt-navigate-finish イベント検出');
-  main();
+  onNavigate();
 });
 
-// 方法2: URL変化の監視（MutationObserver）
+// 方法2: yt-navigate-start イベント（ナビゲーション開始時）
+document.addEventListener('yt-navigate-start', () => {
+  console.log('[NicoTube] yt-navigate-start イベント検出');
+  // コンテナを即座に非表示
+  if (nicotubeContainer) {
+    nicotubeContainer.remove();
+    nicotubeContainer = null;
+  }
+  currentVideoId = null;
+});
+
+// 方法3: URL変化の監視（MutationObserver）
 let lastUrl = location.href;
 const observer = new MutationObserver(() => {
   if (location.href !== lastUrl) {
     console.log('[NicoTube] URL変化検出:', lastUrl, '->', location.href);
     lastUrl = location.href;
-    setTimeout(main, 500);
+    onNavigate();
   }
 });
 
 observer.observe(document.body, { childList: true, subtree: true });
 
-// 方法3: popstate イベント（ブラウザの戻る/進む）
+// 方法4: popstate イベント（ブラウザの戻る/進む）
 window.addEventListener('popstate', () => {
   console.log('[NicoTube] popstate イベント検出');
-  main();
+  onNavigate();
 });
 
 // 初期実行（少し遅延させる）
