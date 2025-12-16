@@ -205,6 +205,8 @@ function optimizeQuery(title) {
     .replace(/（[^）]{10,}）/g, '')
     // 動画種類タグを削除
     .replace(/(\s*[-|｜/／]\s*)?(公式|Official|MV|PV|Music Video|Full|HD|4K|Lyrics?|歌詞|字幕|sub|subtitle|COVER|カバー|歌ってみた|演奏してみた|弾いてみた|叩いてみた|AI)/gi, '')
+    // -〇〇盤-、-ver-などのタグを削除
+    .replace(/-[^-]{1,10}(盤|版|ver\.?|mix|remix|arrange)-?/gi, '')
     // 全角英数字を半角に
     .replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
     // 連続する大文字英単語（ローマ字表記）を削除
