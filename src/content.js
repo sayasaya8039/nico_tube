@@ -195,6 +195,8 @@ function optimizeQuery(title) {
     // 【】と[]を削除
     .replace(/【[^】]*】/g, ' ')
     .replace(/\[[^\]]*\]/g, ' ')
+    // ボーカルソフト名を削除
+    .replace(/\b(Synthesizer\s*V|SynthV|VOCALOID\d?|VOICALOID|UTAU|CeVIO|NEUTRINO|ACE\s*Studio|Piapro\s*Studio)\b/gi, ' ')
     // カバー・歌い手情報を削除
     .replace(/\s*(covered?\s*by|歌[：:]|vocal[：:]|singer[：:]|sung\s*by|feat\.?|ft\.?)\s*.+?(\/|$)/gi, '/')
     .replace(/\s*(covered?\s*by|歌[：:]|vocal[：:]|singer[：:]|sung\s*by)\s*.+$/gi, '')
@@ -202,7 +204,13 @@ function optimizeQuery(title) {
     .replace(/\([^)]{10,}\)/g, '')
     .replace(/（[^）]{10,}）/g, '')
     // 動画種類タグを削除
-    .replace(/(\s*[-|｜/／]\s*)?(公式|Official|MV|PV|Music Video|Full|HD|4K|Lyrics?|歌詞|字幕|sub|subtitle|COVER|カバー|歌ってみた|演奏してみた|弾いてみた|叩いてみた)/gi, '')
+    .replace(/(\s*[-|｜/／]\s*)?(公式|Official|MV|PV|Music Video|Full|HD|4K|Lyrics?|歌詞|字幕|sub|subtitle|COVER|カバー|歌ってみた|演奏してみた|弾いてみた|叩いてみた|AI)/gi, '')
+    // 全角英数字を半角に
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+    // 連続する大文字英単語（ローマ字表記）を削除
+    .replace(/\s+[A-Z]{2,}(\s+[A-Z]{2,})+\s*/g, ' ')
+    // 末尾の大文字英単語の連続を削除
+    .replace(/\s+[A-Z]{2,}(\s+[A-Z]{2,})*$/g, '')
     // 空白の正規化
     .replace(/\s+/g, ' ')
     .trim();
@@ -225,12 +233,21 @@ function optimizeQuery(title) {
     }
   }
 
-  // パターン2: クリーンアップ済みのタイトル全体
+  // パターン2: 日本語部分のみを抽出（曲名として最も有効）
+  const japaneseMatch = cleaned.match(/^([ぁ-んァ-ヶー一-龠々\w\s-]+)/);
+  if (japaneseMatch) {
+    const japanesePart = japaneseMatch[1].trim();
+    if (japanesePart.length >= 2 && !queries.includes(japanesePart)) {
+      queries.push(japanesePart);
+    }
+  }
+
+  // パターン3: クリーンアップ済みのタイトル全体
   if (cleaned.length >= 3 && !queries.includes(cleaned)) {
     queries.push(cleaned);
   }
 
-  // パターン3: 元のタイトルから【】[]のみ削除したもの
+  // パターン4: 元のタイトルから【】[]のみ削除したもの
   const minimal = title
     .replace(/【[^】]*】/g, ' ')
     .replace(/\[[^\]]*\]/g, ' ')
