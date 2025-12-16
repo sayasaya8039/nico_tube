@@ -187,22 +187,66 @@ function formatNumber(num) {
 /**
  * 検索クエリを最適化（余分な情報を除去）
  * @param {string} title
- * @returns {string}
+ * @returns {string[]} 検索クエリの配列（優先度順）
  */
 function optimizeQuery(title) {
-  let query = title
-    .replace(/【[^】]*】/g, '')
-    .replace(/\[[^\]]*\]/g, '')
+  // 基本的なクリーンアップ
+  let cleaned = title
+    // 【】と[]を削除
+    .replace(/【[^】]*】/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    // カバー・歌い手情報を削除
+    .replace(/\s*(covered?\s*by|歌[：:]|vocal[：:]|singer[：:]|sung\s*by|feat\.?|ft\.?)\s*.+?(\/|$)/gi, '/')
+    .replace(/\s*(covered?\s*by|歌[：:]|vocal[：:]|singer[：:]|sung\s*by)\s*.+$/gi, '')
+    // 長い括弧内容を削除
     .replace(/\([^)]{10,}\)/g, '')
-    .replace(/(\s*[-|｜]\s*)?(公式|Official|MV|PV|Music Video|Full|HD|4K|Lyrics?|歌詞|字幕|sub|subtitle)/gi, '')
+    .replace(/（[^）]{10,}）/g, '')
+    // 動画種類タグを削除
+    .replace(/(\s*[-|｜/／]\s*)?(公式|Official|MV|PV|Music Video|Full|HD|4K|Lyrics?|歌詞|字幕|sub|subtitle|COVER|カバー|歌ってみた|演奏してみた|弾いてみた|叩いてみた)/gi, '')
+    // 空白の正規化
     .replace(/\s+/g, ' ')
     .trim();
 
-  if (query.length < 3) {
-    query = title;
+  const queries = [];
+
+  // パターン1: 「曲名 / 作者」形式から曲名と作者を抽出
+  const slashMatch = cleaned.match(/^(.+?)\s*[\/／]\s*(.+?)$/);
+  if (slashMatch) {
+    const songName = slashMatch[1].trim();
+    const artist = slashMatch[2].trim().split(/\s/)[0]; // 作者名の最初の部分だけ
+
+    // 曲名のみ（最優先）
+    if (songName.length >= 2) {
+      queries.push(songName);
+    }
+    // 曲名 + 作者
+    if (songName.length >= 2 && artist.length >= 2) {
+      queries.push(`${songName} ${artist}`);
+    }
   }
 
-  return query;
+  // パターン2: クリーンアップ済みのタイトル全体
+  if (cleaned.length >= 3 && !queries.includes(cleaned)) {
+    queries.push(cleaned);
+  }
+
+  // パターン3: 元のタイトルから【】[]のみ削除したもの
+  const minimal = title
+    .replace(/【[^】]*】/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (minimal.length >= 3 && !queries.includes(minimal)) {
+    queries.push(minimal);
+  }
+
+  // クエリがない場合は元のタイトル
+  if (queries.length === 0) {
+    queries.push(title);
+  }
+
+  console.log('[NicoTube] 生成されたクエリ:', queries);
+  return queries;
 }
 
 /**
@@ -262,9 +306,18 @@ async function main() {
   // UIを表示
   createContainer();
 
-  // 検索実行
-  const query = optimizeQuery(title);
-  const results = await searchNicoVideo(query);
+  // 検索実行（複数のクエリを順番に試す）
+  const queries = optimizeQuery(title);
+  let results = [];
+
+  for (const query of queries) {
+    console.log('[NicoTube] クエリ試行:', query);
+    results = await searchNicoVideo(query);
+    if (results.length > 0) {
+      console.log('[NicoTube] ヒット:', query);
+      break;
+    }
+  }
 
   // 結果を表示
   displayResults(results);
